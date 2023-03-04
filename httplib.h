@@ -51,11 +51,7 @@
 #endif
 
 #ifndef CPPHTTPLIB_IDLE_INTERVAL_USECOND
-#ifdef _WIN32
-#define CPPHTTPLIB_IDLE_INTERVAL_USECOND 10000
-#else
 #define CPPHTTPLIB_IDLE_INTERVAL_USECOND 0
-#endif
 #endif
 
 #ifndef CPPHTTPLIB_REQUEST_URI_MAX_LENGTH
@@ -117,60 +113,6 @@
  * Headers
  */
 
-#ifdef _WIN32
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif //_CRT_SECURE_NO_WARNINGS
-
-#ifndef _CRT_NONSTDC_NO_DEPRECATE
-#define _CRT_NONSTDC_NO_DEPRECATE
-#endif //_CRT_NONSTDC_NO_DEPRECATE
-
-#if defined(_MSC_VER)
-#if _MSC_VER < 1900
-#error Sorry, Visual Studio versions prior to 2015 are not supported
-#endif
-
-#pragma comment(lib, "ws2_32.lib")
-
-#ifdef _WIN64
-using ssize_t = __int64;
-#else
-using ssize_t = long;
-#endif
-#endif // _MSC_VER
-
-#ifndef S_ISREG
-#define S_ISREG(m) (((m)&S_IFREG) == S_IFREG)
-#endif // S_ISREG
-
-#ifndef S_ISDIR
-#define S_ISDIR(m) (((m)&S_IFDIR) == S_IFDIR)
-#endif // S_ISDIR
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif // NOMINMAX
-
-#include <io.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#ifndef WSA_FLAG_NO_HANDLE_INHERIT
-#define WSA_FLAG_NO_HANDLE_INHERIT 0x80
-#endif
-
-#ifndef strcasecmp
-#define strcasecmp _stricmp
-#endif // strcasecmp
-
-using socket_t = SOCKET;
-#ifdef CPPHTTPLIB_USE_POLL
-#define poll(fds, nfds, timeout) WSAPoll(fds, nfds, timeout)
-#endif
-
-#else // not _WIN32
-
 #include <arpa/inet.h>
 #ifndef _AIX
 #include <ifaddrs.h>
@@ -196,7 +138,6 @@ using socket_t = int;
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET (-1)
 #endif
-#endif //_WIN32
 
 #include <algorithm>
 #include <array>
@@ -225,21 +166,7 @@ using socket_t = int;
 #include <thread>
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-#ifdef _WIN32
-#include <wincrypt.h>
-
-// these are defined in wincrypt.h and it breaks compilation if BoringSSL is
-// used
-#undef X509_NAME
-#undef X509_CERT_PAIR
-#undef X509_EXTENSIONS
-#undef PKCS7_SIGNER_INFO
-
-#ifdef _MSC_VER
-#pragma comment(lib, "crypt32.lib")
-#pragma comment(lib, "cryptui.lib")
-#endif
-#elif defined(__APPLE__) // _WIN32
+#ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
 #endif // __APPLE__
@@ -248,10 +175,6 @@ using socket_t = int;
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-
-#if defined(_WIN32) && defined(OPENSSL_USE_APPLINK)
-#include <openssl/applink.c>
-#endif
 
 #include <iostream>
 #include <sstream>
@@ -279,27 +202,6 @@ using socket_t = int;
 namespace httplib {
 
 namespace detail {
-
-/*
- * Backport std::make_unique from C++14.
- *
- * NOTE: This code came up with the following stackoverflow post:
- * https://stackoverflow.com/questions/10149840/c-arrays-and-make-unique
- *
- */
-
-template <class T, class... Args>
-typename std::enable_if<!std::is_array<T>::value, std::unique_ptr<T>>::type
-make_unique(Args &&...args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
-template <class T>
-typename std::enable_if<std::is_array<T>::value, std::unique_ptr<T>>::type
-make_unique(std::size_t n) {
-  typedef typename std::remove_extent<T>::type RT;
-  return std::unique_ptr<T>(new RT[n]);
-}
 
 struct ci {
   bool operator()(const std::string &s1, const std::string &s2) const {
@@ -3565,14 +3467,14 @@ bool prepare_content_receiver(T &x, int &status,
 
     if (encoding == "gzip" || encoding == "deflate") {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-      decompressor = detail::make_unique<gzip_decompressor>();
+      decompressor = std::make_unique<gzip_decompressor>();
 #else
       status = 415;
       return false;
 #endif
     } else if (encoding.find("br") != std::string::npos) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-      decompressor = detail::make_unique<brotli_decompressor>();
+      decompressor = std::make_unique<brotli_decompressor>();
 #else
       status = 415;
       return false;
@@ -5473,14 +5375,14 @@ Server::write_content_with_provider(Stream &strm, const Request &req,
       std::unique_ptr<detail::compressor> compressor;
       if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-        compressor = detail::make_unique<detail::gzip_compressor>();
+        compressor = std::make_unique<detail::gzip_compressor>();
 #endif
       } else if (type == detail::EncodingType::Brotli) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-        compressor = detail::make_unique<detail::brotli_compressor>();
+        compressor = std::make_unique<detail::brotli_compressor>();
 #endif
       } else {
-        compressor = detail::make_unique<detail::nocompressor>();
+        compressor = std::make_unique<detail::nocompressor>();
       }
       assert(compressor != nullptr);
 
@@ -5918,12 +5820,12 @@ inline void Server::apply_ranges(const Request &req, Response &res,
 
       if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-        compressor = detail::make_unique<detail::gzip_compressor>();
+        compressor = std::make_unique<detail::gzip_compressor>();
         content_encoding = "gzip";
 #endif
       } else if (type == detail::EncodingType::Brotli) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-        compressor = detail::make_unique<detail::brotli_compressor>();
+        compressor = std::make_unique<detail::brotli_compressor>();
         content_encoding = "br";
 #endif
       }
@@ -6385,7 +6287,7 @@ inline Result ClientImpl::send(const Request &req) {
 }
 
 inline Result ClientImpl::send_(Request &&req) {
-  auto res = detail::make_unique<Response>();
+  auto res = std::make_unique<Response>();
   auto error = Error::Success;
   auto ret = send(req, *res, error);
   return Result{ret ? std::move(res) : nullptr, error, std::move(req.headers)};
@@ -6516,11 +6418,11 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
     std::unique_ptr<detail::compressor> compressor;
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
     if (compress_) {
-      compressor = detail::make_unique<detail::gzip_compressor>();
+      compressor = std::make_unique<detail::gzip_compressor>();
     } else
 #endif
     {
-      compressor = detail::make_unique<detail::nocompressor>();
+      compressor = std::make_unique<detail::nocompressor>();
     }
 
     return detail::write_content_chunked(strm, req.content_provider_,
@@ -6727,7 +6629,7 @@ inline std::unique_ptr<Response> ClientImpl::send_with_content_provider(
     }
   }
 
-  auto res = detail::make_unique<Response>();
+  auto res = std::make_unique<Response>();
   return send(req, *res, error) ? std::move(res) : nullptr;
 }
 
@@ -8253,27 +8155,27 @@ inline Client::Client(const std::string &scheme_host_port,
 
     if (is_ssl) {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-      cli_ = detail::make_unique<SSLClient>(host, port, client_cert_path,
+      cli_ = std::make_unique<SSLClient>(host, port, client_cert_path,
                                             client_key_path);
       is_ssl_ = is_ssl;
 #endif
     } else {
-      cli_ = detail::make_unique<ClientImpl>(host, port, client_cert_path,
+      cli_ = std::make_unique<ClientImpl>(host, port, client_cert_path,
                                              client_key_path);
     }
   } else {
-    cli_ = detail::make_unique<ClientImpl>(scheme_host_port, 80,
+    cli_ = std::make_unique<ClientImpl>(scheme_host_port, 80,
                                            client_cert_path, client_key_path);
   }
 }
 
 inline Client::Client(const std::string &host, int port)
-    : cli_(detail::make_unique<ClientImpl>(host, port)) {}
+    : cli_(std::make_unique<ClientImpl>(host, port)) {}
 
 inline Client::Client(const std::string &host, int port,
                       const std::string &client_cert_path,
                       const std::string &client_key_path)
-    : cli_(detail::make_unique<ClientImpl>(host, port, client_cert_path,
+    : cli_(std::make_unique<ClientImpl>(host, port, client_cert_path,
                                            client_key_path)) {}
 
 inline Client::~Client() {}

@@ -10,8 +10,8 @@ border = '// -------------------------------------------------------------------
 
 args_parser = argparse.ArgumentParser(description=__doc__)
 args_parser.add_argument(
-    "-e", "--extension", help="extension of the implementation file (default: cc)",
-    default="cc"
+    "-e", "--extension", help="extension of the implementation file (default: cpp)",
+    default="cpp"
 )
 args_parser.add_argument(
     "-o", "--out", help="where to write the files (default: out)", default="out"

@@ -3,7 +3,7 @@ cpp-httplib
 
 [![](https://github.com/yhirose/cpp-httplib/workflows/test/badge.svg)](https://github.com/yhirose/cpp-httplib/actions)
 
-A C++11 single-file header-only cross platform HTTP/HTTPS library.
+A C++20 single-file header-only cross platform HTTP/HTTPS library.
 
 It's extremely easy to setup. Just include the **httplib.h** file in your code!
 

@@ -189,9 +189,9 @@ endif()
 # Only useful if building in-tree, versus using it from an installation.
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-# Require C++11
+# Require C++20
 target_compile_features(${PROJECT_NAME} ${_INTERFACE_OR_PUBLIC}
-	cxx_std_11
+	cxx_std_20
 )
 
 target_include_directories(${PROJECT_NAME} SYSTEM ${_INTERFACE_OR_PUBLIC}
