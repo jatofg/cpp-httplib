@@ -2,4 +2,4 @@
 // compilation unit, thus verifying that inline keywords have not been forgotten
 // when linked together with test.cc.
 
-#include <httplib.h>
+#include "../httplib.h"
