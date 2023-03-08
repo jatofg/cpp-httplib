@@ -13,7 +13,7 @@
 #define CPPHTTPLIB_VERSION "0.12.0"
 
 /*
- * Configuration
+ * Configuration default values
  */
 
 #ifndef CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND
@@ -84,10 +84,12 @@
 #define CPPHTTPLIB_TCP_NODELAY false
 #endif
 
+// cannot be configured dynamically
 #ifndef CPPHTTPLIB_RECV_BUFSIZ
 #define CPPHTTPLIB_RECV_BUFSIZ size_t(4096u)
 #endif
 
+// cannot be configured dynamically
 #ifndef CPPHTTPLIB_COMPRESSION_BUFSIZ
 #define CPPHTTPLIB_COMPRESSION_BUFSIZ size_t(16384u)
 #endif
@@ -99,10 +101,12 @@
                       : 0))
 #endif
 
+// cannot be configured dynamically
 #ifndef CPPHTTPLIB_RECV_FLAGS
 #define CPPHTTPLIB_RECV_FLAGS 0
 #endif
 
+// cannot be configured dynamically
 #ifndef CPPHTTPLIB_SEND_FLAGS
 #define CPPHTTPLIB_SEND_FLAGS 0
 #endif
@@ -558,6 +562,31 @@ using SocketOptions = std::function<void(socket_t sock)>;
 
 void default_socket_options(socket_t sock);
 
+/*
+ * Runtime configuration
+ */
+struct Configuration {
+  time_t keepalive_timeout_second = CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND;
+  size_t keepalive_max_count = CPPHTTPLIB_KEEPALIVE_MAX_COUNT;
+  time_t connection_timeout_second = CPPHTTPLIB_CONNECTION_TIMEOUT_SECOND;
+  time_t connection_timeout_usecond = CPPHTTPLIB_CONNECTION_TIMEOUT_USECOND;
+  time_t read_timeout_second = CPPHTTPLIB_READ_TIMEOUT_SECOND;
+  time_t read_timeout_usecond = CPPHTTPLIB_READ_TIMEOUT_USECOND;
+  time_t write_timeout_second = CPPHTTPLIB_WRITE_TIMEOUT_SECOND;
+  time_t write_timeout_usecond = CPPHTTPLIB_WRITE_TIMEOUT_USECOND;
+  time_t idle_interval_second = CPPHTTPLIB_IDLE_INTERVAL_SECOND;
+  time_t idle_interval_usecond = CPPHTTPLIB_IDLE_INTERVAL_USECOND;
+  size_t request_uri_max_length = CPPHTTPLIB_REQUEST_URI_MAX_LENGTH;
+  size_t header_max_length = CPPHTTPLIB_HEADER_MAX_LENGTH;
+  size_t redirect_max_count = CPPHTTPLIB_REDIRECT_MAX_COUNT;
+  size_t multipart_form_data_file_max_count = CPPHTTPLIB_MULTIPART_FORM_DATA_FILE_MAX_COUNT;
+  size_t payload_max_length = CPPHTTPLIB_PAYLOAD_MAX_LENGTH;
+  size_t form_url_unencoded_payload_max_length = CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH;
+  bool tcp_nodelay = CPPHTTPLIB_TCP_NODELAY;
+  size_t thread_pool_count = CPPHTTPLIB_THREAD_POOL_COUNT;
+  int listen_backlog = CPPHTTPLIB_LISTEN_BACKLOG;
+};
+
 class Server {
 public:
   using Handler = std::function<void(const Request &, Response &)>;
@@ -578,7 +607,7 @@ public:
   using Expect100ContinueHandler =
       std::function<int(const Request &, Response &)>;
 
-  Server();
+  Server(Configuration configuration = Configuration());
 
   virtual ~Server();
 
@@ -653,15 +682,7 @@ protected:
                        const std::function<void(Request &)> &setup_request);
 
   std::atomic<socket_t> svr_sock_;
-  size_t keep_alive_max_count_ = CPPHTTPLIB_KEEPALIVE_MAX_COUNT;
-  time_t keep_alive_timeout_sec_ = CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND;
-  time_t read_timeout_sec_ = CPPHTTPLIB_READ_TIMEOUT_SECOND;
-  time_t read_timeout_usec_ = CPPHTTPLIB_READ_TIMEOUT_USECOND;
-  time_t write_timeout_sec_ = CPPHTTPLIB_WRITE_TIMEOUT_SECOND;
-  time_t write_timeout_usec_ = CPPHTTPLIB_WRITE_TIMEOUT_USECOND;
-  time_t idle_interval_sec_ = CPPHTTPLIB_IDLE_INTERVAL_SECOND;
-  time_t idle_interval_usec_ = CPPHTTPLIB_IDLE_INTERVAL_USECOND;
-  size_t payload_max_length_ = CPPHTTPLIB_PAYLOAD_MAX_LENGTH;
+  Configuration configuration_;
 
 private:
   using Handlers = std::vector<std::pair<std::regex, Handler>>;
@@ -3761,7 +3782,8 @@ inline bool parse_range_header(const std::string &s, Ranges &ranges) try {
 
 class MultipartFormDataParser {
 public:
-  MultipartFormDataParser() = default;
+  explicit MultipartFormDataParser(size_t header_max_length = CPPHTTPLIB_HEADER_MAX_LENGTH)
+      : header_max_length_(header_max_length) {}
 
   void set_boundary(std::string &&boundary) {
     boundary_ = boundary;
@@ -3878,6 +3900,8 @@ public:
   }
 
 private:
+  size_t header_max_length_;
+
   void clear_file_info() {
     file_.name.clear();
     file_.filename.clear();
@@ -4819,10 +4843,11 @@ inline const std::string &BufferStream::get_buffer() const { return buffer; }
 } // namespace detail
 
 // HTTP server implementation
-inline Server::Server()
+inline Server::Server(Configuration configuration)
     : new_task_queue(
-          [] { return new ThreadPool(CPPHTTPLIB_THREAD_POOL_COUNT); }),
-      svr_sock_(INVALID_SOCKET), is_running_(false) {
+          [configuration] { return new ThreadPool(configuration.thread_pool_count); }),
+      svr_sock_(INVALID_SOCKET), is_running_(false),
+      configuration_(configuration) {
   signal(SIGPIPE, SIG_IGN);
 }
 
@@ -4992,35 +5017,35 @@ inline Server &Server::set_default_headers(Headers headers) {
 }
 
 inline Server &Server::set_keep_alive_max_count(size_t count) {
-  keep_alive_max_count_ = count;
+  configuration_.keepalive_max_count = count;
   return *this;
 }
 
 inline Server &Server::set_keep_alive_timeout(time_t sec) {
-  keep_alive_timeout_sec_ = sec;
+  configuration_.keepalive_timeout_second = sec;
   return *this;
 }
 
 inline Server &Server::set_read_timeout(time_t sec, time_t usec) {
-  read_timeout_sec_ = sec;
-  read_timeout_usec_ = usec;
+  configuration_.read_timeout_second = sec;
+  configuration_.read_timeout_usecond = usec;
   return *this;
 }
 
 inline Server &Server::set_write_timeout(time_t sec, time_t usec) {
-  write_timeout_sec_ = sec;
-  write_timeout_usec_ = usec;
+  configuration_.write_timeout_second = sec;
+  configuration_.write_timeout_usecond = usec;
   return *this;
 }
 
 inline Server &Server::set_idle_interval(time_t sec, time_t usec) {
-  idle_interval_sec_ = sec;
-  idle_interval_usec_ = usec;
+  configuration_.idle_interval_second = sec;
+  configuration_.idle_interval_usecond = usec;
   return *this;
 }
 
 inline Server &Server::set_payload_max_length(size_t length) {
-  payload_max_length_ = length;
+  configuration_.payload_max_length = length;
   return *this;
 }
 
@@ -5145,8 +5170,8 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
     res.set_header("Connection", "close");
   } else {
     std::stringstream ss;
-    ss << "timeout=" << keep_alive_timeout_sec_
-       << ", max=" << keep_alive_max_count_;
+    ss << "timeout=" << configuration_.keepalive_timeout_second
+       << ", max=" << configuration_.keepalive_max_count;
     res.set_header("Keep-Alive", ss.str());
   }
 
@@ -5268,7 +5293,7 @@ inline bool Server::read_content(Stream &strm, Request &req, Response &res) {
           },
           // Multipart
           [&](const MultipartFormData &file) {
-            if (file_count++ == CPPHTTPLIB_MULTIPART_FORM_DATA_FILE_MAX_COUNT) {
+            if (file_count++ == configuration_.multipart_form_data_file_max_count) {
               return false;
             }
             cur = req.files.emplace(file.name, file);
@@ -5282,7 +5307,7 @@ inline bool Server::read_content(Stream &strm, Request &req, Response &res) {
           })) {
     const auto &content_type = req.get_header_value("Content-Type");
     if (!content_type.find("application/x-www-form-urlencoded")) {
-      if (req.body.size() > CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH) {
+      if (req.body.size() > configuration_.form_url_unencoded_payload_max_length) {
         res.status = 413; // NOTE: should be 414?
         return false;
       }
@@ -5306,7 +5331,7 @@ inline bool Server::read_content_core(Stream &strm, Request &req, Response &res,
                                       ContentReceiver receiver,
                                       MultipartContentHeader mulitpart_header,
                                       ContentReceiver multipart_receiver) {
-  detail::MultipartFormDataParser multipart_form_data_parser;
+  detail::MultipartFormDataParser multipart_form_data_parser(configuration_.header_max_length);
   ContentReceiverWithProgress out;
 
   if (req.is_multipart_form_data()) {
@@ -5342,7 +5367,7 @@ inline bool Server::read_content_core(Stream &strm, Request &req, Response &res,
     return true;
   }
 
-  if (!detail::read_content(strm, req, payload_max_length_, res.status, nullptr,
+  if (!detail::read_content(strm, req, configuration_.payload_max_length, res.status, nullptr,
                             out, true)) {
     return false;
   }
@@ -5394,11 +5419,11 @@ Server::create_server_socket(const std::string &host, int port,
   return detail::create_socket(
       host, std::string(), port, address_family_, socket_flags, tcp_nodelay_,
       std::move(socket_options),
-      [](socket_t sock, struct addrinfo &ai) -> bool {
+      [this](socket_t sock, struct addrinfo &ai) -> bool {
         if (::bind(sock, ai.ai_addr, static_cast<socklen_t>(ai.ai_addrlen))) {
           return false;
         }
-        if (::listen(sock, CPPHTTPLIB_LISTEN_BACKLOG)) { return false; }
+        if (::listen(sock, configuration_.listen_backlog)) { return false; }
         return true;
       });
 }
@@ -5437,9 +5462,9 @@ inline bool Server::listen_internal() {
     std::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
     while (svr_sock_ != INVALID_SOCKET) {
-      if (idle_interval_sec_ > 0 || idle_interval_usec_ > 0) {
-        auto val = detail::select_read(svr_sock_, idle_interval_sec_,
-                                       idle_interval_usec_);
+      if (configuration_.idle_interval_second > 0 || configuration_.idle_interval_usecond > 0) {
+        auto val = detail::select_read(svr_sock_, configuration_.idle_interval_second,
+                                       configuration_.idle_interval_usecond);
         if (val == 0) { // Timeout
           task_queue->on_idle();
           continue;
@@ -5467,14 +5492,14 @@ inline bool Server::listen_internal() {
 
       {
         timeval tv;
-        tv.tv_sec = static_cast<long>(read_timeout_sec_);
-        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(read_timeout_usec_);
+        tv.tv_sec = static_cast<long>(configuration_.read_timeout_second);
+        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(configuration_.read_timeout_usecond);
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(tv));
       }
       {
         timeval tv;
-        tv.tv_sec = static_cast<long>(write_timeout_sec_);
-        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(write_timeout_usec_);
+        tv.tv_sec = static_cast<long>(configuration_.write_timeout_second);
+        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(configuration_.write_timeout_usecond);
         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv));
       }
 
@@ -5737,7 +5762,7 @@ Server::process_request(Stream &strm, bool close_connection,
 #endif
 
   // Check if the request URI doesn't exceed the limit
-  if (line_reader.size() > CPPHTTPLIB_REQUEST_URI_MAX_LENGTH) {
+  if (line_reader.size() > configuration_.request_uri_max_length) {
     Headers dummy;
     detail::read_headers(strm, dummy);
     res.status = 414;
@@ -5843,9 +5868,9 @@ inline bool Server::is_valid() const { return true; }
 
 inline bool Server::process_and_close_socket(socket_t sock) {
   auto ret = detail::process_server_socket(
-      svr_sock_, sock, keep_alive_max_count_, keep_alive_timeout_sec_,
-      read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-      write_timeout_usec_,
+      svr_sock_, sock, configuration_.keepalive_max_count, configuration_.keepalive_timeout_second,
+      configuration_.read_timeout_second, configuration_.read_timeout_usecond, configuration_.write_timeout_second,
+      configuration_.write_timeout_usecond,
       [this](Stream &strm, bool close_connection, bool &connection_closed) {
         return process_request(strm, close_connection, connection_closed,
                                nullptr);
