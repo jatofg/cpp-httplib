@@ -14,7 +14,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(gtest)
 
 add_executable(httplib-test test.cc)
-target_compile_options(httplib-test PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8;/bigobj>")
 target_link_libraries(httplib-test PRIVATE GTest::gtest_main)
 gtest_discover_tests(httplib-test)
 
